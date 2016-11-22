@@ -87,3 +87,11 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# Eclipse
+.project
+.pydevproject
+
+# Data and other files
+data/
+src/norm/
