@@ -53,11 +53,11 @@ def preprocess(input_file, output_file, text_col=0, ignore_cols=(), uncoded=('',
     codes = []
     n_codes = 0
     for n, vals in enumerate(pair_values_list):
-        pair_values_dict.append({c:i+n for i,c in enumerate(vals)})
+        pair_values_dict.append({c:i+n_codes for i,c in enumerate(vals)})
         n_codes += len(vals)
         for v in vals:
             codes.append(((pair_names[n], v), pair_values[n][v]))
-    C = len(codes)
+    K = len(codes)
     
     # Save the features and codes to file
     
@@ -89,7 +89,7 @@ def preprocess(input_file, output_file, text_col=0, ignore_cols=(), uncoded=('',
         :param code_lists: lists of lists of code names
         :return: numpy
         """
-        vec = np.zeros(C, dtype='bool')
+        vec = np.zeros(K, dtype='bool')
         for n, vals in enumerate(code_lists):
             for v in vals:
                 vec[pair_values_dict[n][v]] = True
