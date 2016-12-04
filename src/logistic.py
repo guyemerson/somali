@@ -1,36 +1,117 @@
 import pickle, numpy as np
 from sklearn import linear_model
 
-def train(features, codes, C=0.01):
+def train(features, codes, penalty='l1', C=1):
     """
     Train logistic regression classifiers,
     independently for each code 
     :param features: input matrix
     :param codes: output matrix
-    :param C: inverse of L1 regularisation strength
+    :param penalty: type of regularisation (l1 or l2)
+    :param C: inverse of regularisation strength
     :return: list of classifiers
     """
     classifiers = []
-    
-    N, K = codes.shape  # number of messages, number of codes
-    total = codes.sum(0)  # total labelled with each code
-    
-    for i in range(K):
+    # Iterate throgh each code (i.e. each column of codes matrix)
+    for code_i in codes.transpose():
         # Define a logistic regression model for each code
         model = linear_model.LogisticRegression(
-            penalty='l1',
-            class_weight={1:total[i], 0:N-total[i]},
+            penalty=penalty,
             C=C)
+        # (Could use class_weight to make positive instances more important...)
         
-        model.fit(features, codes[:,i])
+        # Train the model
+        model.fit(features, code_i)
         
         classifiers.append(model)
     
     return classifiers
 
-if __name__ == "__main__":
-    with open('../data/malaria.pkl', 'rb') as f:
+
+def train_on_file(input_name, output_name=None, **kwargs):
+    """
+    Train logistic regression classifiers on a file 
+    :param input_name: name of input file (inside ../data/, without .pkl file extension)
+    :param output_name: name of output file (inside ../data/, without .pkl file extension, defaults to input_name + '_classifiers')
+    :param **kwargs: additional keyward arguments will be passed to train
+    :return: features, codes, classifiers
+    """
+    # Default value for output_name
+    if output_name is None:
+        output_name = input_name + '_classifiers'
+    # Load features and codes
+    with open('../data/{}.pkl'.format(input_name), 'rb') as f:
         features, codes = pickle.load(f)
-    classifiers = train(features, codes)
-    with open('../data/malaria_classifiers.pkl', 'wb') as f:
+    # Train model
+    classifiers = train(features, codes, **kwargs)
+    # Save model
+    with open('../data/{}.pkl'.format(output_name), 'wb') as f:
         pickle.dump(classifiers, f)
+    return features, codes, classifiers
+
+
+def predict(classifiers, messages):
+    """
+    Apply a number of classifiers to a number of messages,
+    returning the most likely result for each classfier ond message
+    :param classifiers: list of classifier objects
+    :param messages: feature vectors (as a matrix)
+    :return: array of predictions
+    """
+    predictions = [c.predict(messages) for c in classifiers]
+    return np.array(predictions).transpose()
+
+def predict_proba(classifiers, messages):
+    """
+    Apply a number of classifiers to a number of messages,
+    returning the probability of predicting each code for each message
+    :param classifiers: list of classifier objects
+    :param messages: feature vectors (as a matrix)
+    :return: array of probabilities
+    """
+    prob = [c.predict_proba(messages) for c in classifiers]
+    return np.array(prob).transpose()
+
+
+def evaluate(pred, gold, verbose=True):
+    """
+    Calculate the accuracy, precision, recall, and F1 score,
+    for a set of predictions, compared to a gold standard 
+    :param pred: predictions of classifiers
+    :param gold: gold standard annotations
+    :param verbose: whether to print results (default True)
+    :return: accuracy, precision, recall, F1 (each as an array)
+    """
+    # Check which predictions are correct
+    correct = (pred == gold)
+    n_correct = correct.sum(0)
+    
+    # Calculate different types of mistake 
+    n_true_correct = (correct * gold).sum(0)
+    n_false_correct = (correct * (1-gold)).sum(0)
+    n_true_wrong = ((1-correct) * gold).sum(0)
+    n_false_wrong = ((1-correct) * (1-gold)).sum(0)
+    
+    # Accuracy: proportion correct, out of all messages
+    accuracy = n_correct / pred.shape[0]
+    # Precision: proportion correct, out of those predicted to have a code
+    precision = n_true_correct / (n_true_correct + n_false_wrong)
+    # Recall: proportion correct, out of those annotated with a code
+    recall = n_true_correct / (n_true_correct + n_true_wrong)
+    # F1: harmonic mean of precision and recall
+    f1 = 2 * precision * recall / (precision + recall)
+    
+    if verbose:
+        # Print results
+        print('Accuracy:', accuracy)
+        print('Precision:', precision)
+        print('Recall:', recall)
+        print('F1:', f1)
+    
+    return accuracy, precision, recall, f1 
+
+
+if __name__ == "__main__":
+    features, codes, classifiers = train_on_file('malaria')
+    predictions = predict(classifiers, features)
+    evaluate(predictions, codes)
