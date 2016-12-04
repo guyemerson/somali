@@ -1,9 +1,97 @@
 import csv, pickle, os, numpy as np
 from collections import Counter
 
-def preprocess(input_file, output_file, text_col=0, ignore_cols=(), uncoded=('', 'NM')):
+def preprocess_long(input_file, output_file, text_col=0, ignore_cols=()):
     """
-    Preprocess a csv file to pairs of feature vectors and binary codes 
+    Preprocess a csv file to feature vectors and binary codes,
+    where the input data has a 0 or 1 for each code and message
+    :param input_file: csv input file name
+    :param output_file: pkl output file name
+    :param text_col: index of column containing text
+    :param ignore_cols: indices of columns to ignore
+    """
+    if os.path.splitext(input_file)[1] != '.csv':
+        raise ValueError('Input must be a csv file')
+    if os.path.splitext(output_file)[1] != '.pkl':
+        raise ValueError('Output must be a pkl file')
+    
+    # Extract total set of features and codes
+    
+    with open(input_file, newline='') as f:
+        # Process the file as a CSV file
+        reader = csv.reader(f)
+        # Find the headings (the first row of the file)
+        headings = next(reader)
+        # Restrict ourselves to a subset of columns (not containing text, and not ignored) 
+        code_cols = sorted(set(range(len(headings))) - {text_col} - set(ignore_cols))
+        K = len(code_cols)
+        code_freq = np.zeros(K, dtype='int64')
+        code_names = [headings[i] for i in code_cols]
+        vocab = Counter()
+        # Iterate through data
+        for vals in reader:
+            vocab.update(vals[text_col].split())
+            code_freq += np.array([vals[i] for i in code_cols], dtype='bool')
+    
+    # Save the features and codes to file
+    
+    output_name = os.path.splitext(output_file)[0]
+    with open(output_name+'_vocab.pkl', 'wb') as f:
+        pickle.dump(sorted(vocab.items()), f)
+    codes = [(code_names[i], code_freq[i]) for i in range(K)]
+    with open(output_name+'_codes.pkl', 'wb') as f:
+        pickle.dump(codes, f)
+    
+    print('Codes:')
+    print(*codes, sep='\n')
+    
+    # Convert messages to vectors
+    
+    vocab_list = sorted(vocab)
+    vocab_dict = {w:i for i,w in enumerate(vocab_list)}
+    V = len(vocab)
+    
+    def vectorise_features(message):
+        """
+        Convert a message to a feature vector
+        :param message: string
+        :return: numpy array
+        """
+        vec = np.zeros(V)
+        for w in message.split():
+            vec[vocab_dict[w]] += 1
+        return vec
+    
+    # Process data
+    
+    feature_vecs = []
+    code_vecs = []
+    
+    with open(input_file, newline='') as f:
+        # Process the file as a CSV file
+        reader = csv.reader(f)
+        # Skip headings
+        next(reader)
+        # Process each message
+        for vals in reader:
+            msg = vals[text_col]
+            feature_vecs.append(vectorise_features(msg))
+            code_v = np.array([vals[i] for i in code_cols], dtype='bool')
+            code_vecs.append(code_v)
+    
+    # Save to file
+    
+    with open(output_file, 'wb') as f:
+        feature_mat = np.array(feature_vecs)
+        code_mat = np.array(code_vecs)
+        pickle.dump((feature_mat, code_mat), f)
+
+
+def preprocess_pairs(input_file, output_file, text_col=0, ignore_cols=(), uncoded=('', 'NM')):
+    """
+    Preprocess a csv file to feature vectors and binary codes,
+    where the input data has groups of codes,
+    and each message has up to two codes from each group
     :param input_file: csv input file name
     :param output_file: pkl output file name
     :param text_col: index of column containing text
@@ -13,7 +101,7 @@ def preprocess(input_file, output_file, text_col=0, ignore_cols=(), uncoded=('',
     if os.path.splitext(input_file)[1] != '.csv':
         raise ValueError('Input must be a csv file')
     if os.path.splitext(output_file)[1] != '.pkl':
-        raise ValueError('Input must be a pkl file')
+        raise ValueError('Output must be a pkl file')
     
     # Extract total set of features and codes
     
@@ -121,4 +209,6 @@ def preprocess(input_file, output_file, text_col=0, ignore_cols=(), uncoded=('',
         pickle.dump((feature_mat, code_mat), f)
 
 if __name__ == "__main__":
-    preprocess('../data/malaria_original.csv', '../data/malaria.pkl', ignore_cols=[1,6])
+    #preprocess_pairs('../data/malaria_original.csv', '../data/malaria.pkl', ignore_cols=[1,6])
+    #preprocess_pairs('../data/wash_original.csv', '../data/wash.pkl', ignore_cols=[1,2,13,14])
+    preprocess_long('../data/nutrition_original.csv', '../data/nutrition.pkl', ignore_cols=[1,13,14])
