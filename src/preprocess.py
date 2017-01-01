@@ -31,7 +31,7 @@ def preprocess_long(input_file, output_file, text_col=0, ignore_cols=()):
         # Iterate through data
         for vals in reader:
             vocab.update(vals[text_col].split())
-            code_freq += np.array([vals[i] for i in code_cols], dtype='bool')
+            code_freq += np.array([int(vals[i]) for i in code_cols], dtype='bool')
     
     # Save the features and codes to file
     
@@ -76,7 +76,7 @@ def preprocess_long(input_file, output_file, text_col=0, ignore_cols=()):
         for vals in reader:
             msg = vals[text_col]
             feature_vecs.append(vectorise_features(msg))
-            code_v = np.array([vals[i] for i in code_cols], dtype='bool')
+            code_v = np.array([int(vals[i]) for i in code_cols], dtype='bool')
             code_vecs.append(code_v)
     
     # Save to file
@@ -211,4 +211,5 @@ def preprocess_pairs(input_file, output_file, text_col=0, ignore_cols=(), uncode
 if __name__ == "__main__":
     #preprocess_pairs('../data/malaria_original.csv', '../data/malaria.pkl', ignore_cols=[1,6])
     #preprocess_pairs('../data/wash_original.csv', '../data/wash.pkl', ignore_cols=[1,2,13,14])
-    preprocess_long('../data/nutrition_original.csv', '../data/nutrition.pkl', ignore_cols=[1,13,14])
+    #preprocess_long('../data/nutrition_original.csv', '../data/nutrition.pkl', ignore_cols=[1,13,14])
+    preprocess_long('../data/ANC_Delivery Training Set.xlsx - Short.csv', '../data/delivery.pkl')

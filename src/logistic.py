@@ -20,10 +20,14 @@ def train(features, codes, penalty='l1', C=1):
             C=C)
         # (Could use class_weight to make positive instances more important...)
         
-        # Train the model
-        model.fit(features, code_i)
+        if code_i.sum() > 1:  # Make sure there is more than one training example
+            # Train the model
+            model.fit(features, code_i)
+            
+            classifiers.append(model)
         
-        classifiers.append(model)
+        else:
+            classifiers.append(None)
     
     return classifiers
 
@@ -58,7 +62,7 @@ def predict(classifiers, messages):
     :param messages: feature vectors (as a matrix)
     :return: array of predictions
     """
-    predictions = [c.predict(messages) for c in classifiers]
+    predictions = [c.predict(messages) if c is not None else np.zeros(len(messages)) for c in classifiers]
     return np.array(predictions).transpose()
 
 def predict_proba(classifiers, messages):
@@ -112,6 +116,6 @@ def evaluate(pred, gold, verbose=True):
 
 
 if __name__ == "__main__":
-    features, codes, classifiers = train_on_file('malaria')
+    features, codes, classifiers = train_on_file('delivery', output_name='delivery_C1', C=1)
     predictions = predict(classifiers, features)
     evaluate(predictions, codes)
