@@ -111,15 +111,15 @@ def apply_to_parts(function, sep):
     
 ### Functions for producing vectors of features
 
-def get_global_list(bags_of_features):
+def get_global_set(bags_of_features):
     """
     Find all the distinct features in many bags of features 
-    :param bags_of_features: iterable of Counters
+    :param bags_of_features: iterable of dict-like or set-like
     :return: set of features
     """
     features = set()
     for bag in bags_of_features:
-        features |= bag.keys()
+        features.update(bag)
     return features
 
 def document_frequency(bags_of_features):
