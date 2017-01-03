@@ -3,7 +3,7 @@ from collections import Counter
 
 from features import get_global_set, feature_list_and_dict, vectorise
 
-def save(feat_bags, code_vecs, code_names, output_file):
+def save(feat_bags, code_vecs, code_names, output_file, directory='../data'):
     """
     Save features and codes to file
     :param feat_bags: list of dict-like objects (supervised learning input)
@@ -11,10 +11,11 @@ def save(feat_bags, code_vecs, code_names, output_file):
     - rows correspond to elements in feat_bags
     - columns correspond to elements in code_names
     :param code_names: list of names of codes
-    :param output_file: name of output file
+    :param output_file: name of output file (without .pkl file extension)
     - as well as saving to example.pkl, also saves to:
     - example_features.pkl (list of names of features, with frequencies)
     - example_codes.pkl (list of names of codes, with frequencies)
+    :param directory: directory of data files (default ../data)
     """
     N = len(feat_bags)
     K = len(code_names)
@@ -36,37 +37,32 @@ def save(feat_bags, code_vecs, code_names, output_file):
     # Save the features and codes to file,
     # as a list of names and frequencies
     
-    output_name = os.path.splitext(output_file)[0]
-    
     feats = list(zip(feat_list, feat_freq))
-    with open(output_name+'_features.pkl', 'wb') as f:
+    with open(os.path.join(directory, output_file+'_features.pkl'), 'wb') as f:
         pickle.dump(feats, f)
     
     codes = list(zip(code_names, code_freq))
-    with open(output_name+'_codes.pkl', 'wb') as f:
+    with open(os.path.join(directory, output_file+'_codes.pkl'), 'wb') as f:
         pickle.dump(codes, f)
     
     print('Codes:')
     print(*codes, sep='\n')
     
-    with open(output_file, 'wb') as f:
+    with open(os.path.join(directory, output_file+'.pkl'), 'wb') as f:
         pickle.dump((feat_vecs, code_vecs), f)
 
-def preprocess_long(input_file, output_file, extractor, text_col=0, ignore_cols=(), convert=bool):
+def preprocess_long(input_file, output_file, extractor, directory='../data', text_col=0, ignore_cols=(), convert=bool):
     """
     Preprocess a csv file to feature vectors and binary codes,
     where the input data has a 0 or 1 for each code and message
-    :param input_file: csv input file name
-    :param output_file: pkl output file name
+    :param input_file: input file name (without .csv file extension)
+    :param output_file: output file name (without .pkl file extension)
     :param extractor: function mapping strings to bags of features
+    :param directory: directory of data files (default ../data)
     :param text_col: index of column containing text
     :param ignore_cols: indices of columns to ignore
     :param convert: function to convert codes strings (e.g. bool or int)
     """
-    if os.path.splitext(input_file)[1] != '.csv':
-        raise ValueError('Input must be a csv file')
-    if os.path.splitext(output_file)[1] != '.pkl':
-        raise ValueError('Output must be a pkl file')
     
     # Extract features and codes
     # We can vectorise the codes immediately, but for features, we first need a global list
@@ -74,7 +70,7 @@ def preprocess_long(input_file, output_file, extractor, text_col=0, ignore_cols=
     feat_bags = []
     code_vecs = []
     
-    with open(input_file, newline='') as f:
+    with open(os.path.join(directory, input_file+'.csv'), newline='') as f:
         # Process the file as a CSV file
         reader = csv.reader(f)
         # Find the headings (the first row of the file)
@@ -91,25 +87,22 @@ def preprocess_long(input_file, output_file, extractor, text_col=0, ignore_cols=
     # Convert the list of code vectors to a matrix
     code_vecs = np.array(code_vecs)
     # Save the information
-    save(feat_bags, code_vecs, code_names, output_file)
+    save(feat_bags, code_vecs, code_names, output_file, directory)
 
-def preprocess_pairs(input_file, output_file, extractor, text_col=0, ignore_cols=(), uncoded=('', 'NM')):
+def preprocess_pairs(input_file, output_file, extractor, directory='../data', text_col=0, ignore_cols=(), uncoded=('', 'NM')):
     """
     Preprocess a csv file to feature vectors and binary codes,
     where the input data has groups of codes,
     and each message has up to two codes from each group.
     Each group must take up exactly two columns.
-    :param input_file: csv input file name
-    :param output_file: pkl output file name
+    :param input_file: input file name (without .csv file extension)
+    :param output_file: output file name (without .pkl file extension)
     :param extractor: function mapping strings to bags of features
+    :param directory: directory of data files (default ../data)
     :param text_col: index of column containing text
     :param ignore_cols: indices of columns to ignore
     :param uncoded: strings to be interpreted as lacking a code
     """
-    if os.path.splitext(input_file)[1] != '.csv':
-        raise ValueError('Input must be a csv file')
-    if os.path.splitext(output_file)[1] != '.pkl':
-        raise ValueError('Output must be a pkl file')
     
     # Extract features and codes
     # We cannot vectorise these until we have a global list
@@ -117,7 +110,7 @@ def preprocess_pairs(input_file, output_file, extractor, text_col=0, ignore_cols
     feat_bags = []
     code_sets = []
     
-    with open(input_file, newline='') as f:
+    with open(os.path.join(directory, input_file+'.csv'), newline='') as f:
         # Process the file as a CSV file
         reader = csv.reader(f)
         
@@ -161,12 +154,12 @@ def preprocess_pairs(input_file, output_file, extractor, text_col=0, ignore_cols
     code_vecs = np.array([vectorise_codes(x) for x in code_sets])
     
     # Save the information
-    save(feat_bags, code_vecs, code_list, output_file)
+    save(feat_bags, code_vecs, code_list, output_file, directory)
 
 
 if __name__ == "__main__":
     from features import bag_of_words
-    #preprocess_pairs('../data/malaria_original.csv', '../data/malaria.pkl', bag_of_words, ignore_cols=[1,6])
-    #preprocess_pairs('../data/wash_original.csv', '../data/wash.pkl', bag_of_words, ignore_cols=[1,2,13,14])
-    #preprocess_long('../data/nutrition_original.csv', '../data/nutrition.pkl', bag_of_words, ignore_cols=[1,13,14], convert=bool)
-    #preprocess_long('../data/ANC_Delivery Training Set.xlsx - Short.csv', '../data/delivery.pkl', bag_of_words, convert=int)
+    #preprocess_pairs('malaria_original', 'malaria', bag_of_words, ignore_cols=[1,6])
+    #preprocess_pairs('wash_original', 'wash', bag_of_words, ignore_cols=[1,2,13,14])
+    #preprocess_long('nutrition_original', 'nutrition', bag_of_words, ignore_cols=[1,13,14], convert=bool)
+    #preprocess_long('ANC_Delivery Training Set.xlsx - Short', 'delivery', bag_of_words, convert=int)

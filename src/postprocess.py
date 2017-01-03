@@ -1,4 +1,4 @@
-import pickle, numpy as np
+import os, pickle, numpy as np
 
 def highest(classifiers, N=10):
     """
@@ -22,26 +22,33 @@ def highest(classifiers, N=10):
             res[i] = -1
     return res
 
-def display(dataset, classifiers='classifiers'):
+def display(dataset, classifier_suffix, code_suffix='codes', feature_suffix='features', directory='../data'):
     """
     Display the top features for each code
-    :param name: name of the dataset
+    :param dataset: name of the dataset to load, which the following suffixes are added to
+    :param classifier_suffix: classifier file
+    :param code_suffix: code file (default 'codes')
+    :param feature_suffix: feature file (default 'features')
+    The following files will be loaded:
+    - {dataset}_{classifier_suffix}.pkl
+    - {dataset}_{code_suffix}.pkl
+    - {dataset}_{feature_suffix}.pkl
+    :param directory: directory of data files (default ../data)
     """
-    with open('../data/{}_{}.pkl'.format(dataset, classifiers), 'rb') as f:
+    with open(os.path.join(directory, '{}_{}.pkl'.format(dataset, classifier_suffix)), 'rb') as f:
         classifiers = pickle.load(f)
     top = highest(classifiers)
-    with open('../data/{}_codes.pkl'.format(dataset), 'rb') as f:
+    with open(os.path.join(directory, '{}_{}.pkl'.format(dataset, code_suffix)), 'rb') as f:
         codes = pickle.load(f)
     code_list = [x for x, _ in codes]
-    with open('../data/{}_vocab.pkl'.format(dataset), 'rb') as f:
-        vocab = pickle.load(f)
-    vocab_list = [x for x, _ in vocab]
-    for i, feats in enumerate(top):
-        print(code_list[i])
-        print([vocab_list[x] for x in feats if x >= 0])
+    with open(os.path.join(directory, '{}_{}.pkl'.format(dataset, feature_suffix)), 'rb') as f:
+        feats = pickle.load(f)
+    feat_list = [x for x, _ in feats]
+    for name, best_feats in zip(code_list, top):
+        print(name)
+        print([feat_list[x] for x in best_feats if x >= 0])
         print()
     
 
 if __name__ == "__main__":
-    #display('nutrition')
     display('nutrition', 'C1')

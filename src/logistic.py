@@ -1,4 +1,4 @@
-import pickle, numpy as np
+import pickle, os, numpy as np
 from sklearn import linear_model
 
 def train(features, codes, penalty='l1', C=1):
@@ -32,25 +32,25 @@ def train(features, codes, penalty='l1', C=1):
     return classifiers
 
 
-def train_on_file(input_name, output_name=None, **kwargs):
+def train_on_file(input_name, output_suffix=None, directory='../data', **kwargs):
     """
     Train logistic regression classifiers on a file 
-    :param input_name: name of input file (inside ../data/, without .pkl file extension)
-    :param output_name: name of output file (inside ../data/, without .pkl file extension, defaults to input_name + '_classifiers')
+    :param input_name: name of input file (without .pkl file extension)
+    :param output_suffix: string to append to name of output file
+    (if none is given, no file is saved)
+    :param directory: directory of data files (default ../data)
     :param **kwargs: additional keyward arguments will be passed to train
     :return: features, codes, classifiers
     """
-    # Default value for output_name
-    if output_name is None:
-        output_name = input_name + '_classifiers'
     # Load features and codes
-    with open('../data/{}.pkl'.format(input_name), 'rb') as f:
+    with open(os.path.join(directory, input_name+'.pkl'), 'rb') as f:
         features, codes = pickle.load(f)
     # Train model
     classifiers = train(features, codes, **kwargs)
     # Save model
-    with open('../data/{}.pkl'.format(output_name), 'wb') as f:
-        pickle.dump(classifiers, f)
+    if output_suffix:
+        with open(os.path.join(directory, '{}_{}.pkl'.format(input_name, output_suffix)), 'wb') as f:
+            pickle.dump(classifiers, f)
     return features, codes, classifiers
 
 
@@ -116,6 +116,7 @@ def evaluate(pred, gold, verbose=True):
 
 
 if __name__ == "__main__":
-    features, codes, classifiers = train_on_file('delivery', output_name='delivery_C1', C=1)
-    predictions = predict(classifiers, features)
-    evaluate(predictions, codes)
+    'example use:'
+    #features, codes, classifiers = train_on_file('delivery', 'C1', C=1)
+    #predictions = predict(classifiers, features)
+    #evaluate(predictions, codes)
