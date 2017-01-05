@@ -1,8 +1,8 @@
 import csv, pickle, numpy as np
 from collections import Counter
 
-from logistic import evaluate, predict
 from features import bag_of_words, vectorise, apply_to_parts
+from active import score_by_uncertainty, top_N
 
 name, weeks = 'wash', '12'
 #name, weeks = 'delivery', '34'
@@ -41,15 +41,14 @@ with open('../data/{}_codes.pkl'.format(name), 'rb') as f:
 code_names = [x for x,_ in codes]
 headings.extend(code_names)
 
-# Make predictions
+# Choose which datapoints to annotate next
 
-predictions = predict(classifiers, feat_vecs)
-for i, m in enumerate(msgs):
-    m.extend([1 if x else '' for x in predictions[i]])
+scores = score_by_uncertainty(feat_vecs, classifiers)
+top = top_N(scores, 500)
 
 # Save the data with the predictions
 
-with open('../data/{}_predictions.csv'.format(name), 'w', newline='') as f:
+with open('../data/{}_top500.csv'.format(name), 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerow(headings)
-    writer.writerows(msgs)
+    writer.writerows([msgs[i] for i in top])

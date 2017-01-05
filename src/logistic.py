@@ -58,23 +58,37 @@ def predict(classifiers, messages):
     """
     Apply a number of classifiers to a number of messages,
     returning the most likely result for each classfier ond message
-    :param classifiers: list of classifier objects
+    :param classifiers: classifier or list of classifiers
     :param messages: feature vectors (as a matrix)
     :return: array of predictions
     """
-    predictions = [c.predict(messages) if c is not None else np.zeros(len(messages)) for c in classifiers]
-    return np.array(predictions).transpose()
+    # If more than one classifier is given, apply each
+    if isinstance(classifiers, list):
+        # Get the predictions from each classifier, giving zeros when a classifier is None
+        predictions = [c.predict(messages) if c is not None else np.zeros(len(messages)) for c in classifiers]
+        # Transpose so that the shape is (n_datapoints, n_classifiers)
+        return np.array(predictions, dtype='bool').transpose()
+    else:
+        return classifiers.predict(messages)
 
-def predict_proba(classifiers, messages):
+def predict_prob(classifiers, messages):
     """
     Apply a number of classifiers to a number of messages,
     returning the probability of predicting each code for each message
-    :param classifiers: list of classifier objects
+    :param classifiers: classifier or list of classifiers
     :param messages: feature vectors (as a matrix)
     :return: array of probabilities
     """
-    prob = [c.predict_proba(messages) for c in classifiers]
-    return np.array(prob).transpose()
+    # If more than one classifier is given, apply each
+    if isinstance(classifiers, list):
+        # Get the prediction probabilities from each classifier
+        # c.predict_proba returns probabilities for [False, True]
+        # taking [:,1] will just give us probability of True
+        prob = [c.predict_proba(messages)[:,1] if c is not None else np.zeros(len(messages)) for c in classifiers]
+        # Transpose so that the shape is (n_datapoints, n_classifiers)
+        return np.array(prob).transpose()
+    else:
+        return classifiers.predict_proba(messages)[:,1]
 
 
 def evaluate(pred, gold, verbose=True):
