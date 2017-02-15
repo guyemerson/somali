@@ -1,33 +1,80 @@
 import pickle, os, numpy as np
 from sklearn import linear_model
 
-def train(features, codes, penalty='l1', C=1):
+def train(features, codes, penalty='l1', C=1, keywords=None, keyword_strength=1, keyword_weight=1, weight_option='balanced', smoothing=0):
     """
     Train logistic regression classifiers,
-    independently for each code 
-    :param features: input matrix
-    :param codes: output matrix
-    :param penalty: type of regularisation (l1 or l2)
+    independently for each code
+    :param features: input matrix, of shape [num_messages, num_features]
+    :param codes: output matrix, of shape [num_messages, num_codes]
+    :param penalty: type of regularisation ('l1' or 'l2')
     :param C: inverse of regularisation strength
+    :param keywords: (optional) matrix of shape [num_codes, num_features],
+        with a nonzero value when a feature should be considered a keyword for that code.
+        The value should be the importance of this keyword, relative to a single message
+    :param keyword_strength: (default 1) value to give to the vector for each keyword feature
+    :param keyword_weight: (default 1) weight to assign a keyword vector (relative to a normal message)
+    :param weight_option: determine the total weight for each code across all messages. Options are:
+        - 'balanced': total weight is the same for true and false
+        - 'smoothed': total weight is the observed number, plus smoothing
+    :param smoothing: (default 0, i.e. no smoothing) constant to add,
+        to reweight frequencies of each code
     :return: list of classifiers
     """
+    N, F = features.shape
     classifiers = []
-    # Iterate throgh each code (i.e. each column of codes matrix)
-    for code_i in codes.transpose():
-        # Define a logistic regression model for each code
-        model = linear_model.LogisticRegression(
-            penalty=penalty,
-            C=C)
-        # (Could use class_weight to make positive instances more important...)
-        
-        if code_i.sum() > 1:  # Make sure there is more than one training example
-            # Train the model
-            model.fit(features, code_i)
-            
-            classifiers.append(model)
-        
-        else:
+    # Iterate through each code (i.e. each column of codes matrix)
+    for i, code_i in enumerate(codes.transpose()):
+        # If there are no training examples, return None for this code
+        N_pos = code_i.sum()
+        if N_pos == 0:
             classifiers.append(None)
+            continue
+        
+        # Check if keywords were given
+        if keywords is None:
+            # If no keywords, leave matrices the same
+            feat_mat = features
+            code_vec = code_i
+            N_key = 0
+        else:
+            # If given, add the keywords as additional messages
+            indices = keywords[i].nonzero()[0]
+            N_key = len(indices)
+            # Treat each keyword feature as a separate message
+            key_features = np.zeros((N_key, F))
+            for j, j_ind in enumerate(indices):
+                # Set the strength of the feature as asked for
+                key_features[j, j_ind] = keyword_strength
+            key_codes = np.ones(N_key, dtype='bool')
+            # Extend the feature and code arrays
+            feat_mat = np.concatenate((features, key_features))
+            code_vec = np.concatenate((code_i, key_codes))
+        
+        # Weight classes as asked for
+        if weight_option == 'balanced':
+            class_weight = 'balanced'
+        elif weight_option == 'smoothed':
+            N_neg = N - N_pos
+            class_weight = {True: (N_pos + smoothing) / (N_pos + N_key*keyword_weight),
+                            False: (N_neg + smoothing) / N_neg}
+        else:
+            raise ValueError('weight option not recognised')
+        
+        # Weight keyword examples as asked for
+        if keyword_weight == 1:
+            sample_weight = None
+        else:
+            sample_weight = np.ones(N+N_key)
+            sample_weight[N:] = keyword_weight
+        
+        # Initialise a logistic regression model
+        model = linear_model.LogisticRegression(penalty=penalty, C=C, class_weight=class_weight)
+        
+        # Train the model
+        model.fit(feat_mat, code_vec, sample_weight=sample_weight)
+        
+        classifiers.append(model)
     
     return classifiers
 
