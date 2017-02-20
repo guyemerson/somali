@@ -9,9 +9,8 @@ def train(features, codes, penalty='l1', C=1, keywords=None, keyword_strength=1,
     :param codes: output matrix, of shape [num_messages, num_codes]
     :param penalty: type of regularisation ('l1' or 'l2')
     :param C: inverse of regularisation strength
-    :param keywords: (optional) matrix of shape [num_codes, num_features],
-        with a nonzero value when a feature should be considered a keyword for that code.
-        The value should be the importance of this keyword, relative to a single message
+    :param keywords: (optional) list of length num_codes, with each element being
+        an iterable of indices of features which should be considered a keyword for that code
     :param keyword_strength: (default 1) value to give to the vector for each keyword feature
     :param keyword_weight: (default 1) weight to assign a keyword vector (relative to a normal message)
     :param weight_option: determine the total weight for each code across all messages. Options are:
@@ -39,7 +38,7 @@ def train(features, codes, penalty='l1', C=1, keywords=None, keyword_strength=1,
             N_key = 0
         else:
             # If given, add the keywords as additional messages
-            indices = keywords[i].nonzero()[0]
+            indices = keywords[i]
             N_key = len(indices)
             # Treat each keyword feature as a separate message
             key_features = np.zeros((N_key, F))
@@ -79,19 +78,25 @@ def train(features, codes, penalty='l1', C=1, keywords=None, keyword_strength=1,
     return classifiers
 
 
-def train_on_file(input_name, output_suffix=None, directory='../data', **kwargs):
+def train_on_file(input_name, output_suffix=None, directory='../data', keyword_file=None, **kwargs):
     """
     Train logistic regression classifiers on a file 
     :param input_name: name of input file (without .pkl file extension)
     :param output_suffix: string to append to name of output file
     (if none is given, no file is saved)
     :param directory: directory of data files (default ../data)
+    :param keyword_file: name of keyword file
     :param **kwargs: additional keyward arguments will be passed to train
     :return: features, codes, classifiers
     """
     # Load features and codes
     with open(os.path.join(directory, input_name+'.pkl'), 'rb') as f:
         features, codes = pickle.load(f)
+    # If keyword file given, get keywords
+    if keyword_file is not None:
+        with open(os.path.join(directory, keyword_file+'.pkl'), 'rb') as f:
+            keywords = pickle.load(f)
+        kwargs['keywords'] = keywords
     # Train model
     classifiers = train(features, codes, **kwargs)
     # Save model
