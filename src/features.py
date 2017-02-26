@@ -1,5 +1,6 @@
 import numpy as np
 from collections import Counter
+from abc import ABC, abstractmethod
 
 ### Functions mapping messages to bags of features
 
@@ -57,58 +58,81 @@ def bag_of_variable_character_ngrams(msg, min_n, max_n):
 
 ### Functions for combining types of feature
 
-def combine(functions, arg_params=None, kwarg_params=None):
+class Extractor(ABC):
     """
-    Wrap many feature extractors in a single function
-    :param functions: iterable of functions mapping from a string to a Counter
-    - Counters should have distinct keys, to avoid collisions
-    :param arg_params: iterable of additional arguments for the feature extractors
-    :param kwarg_params: iterable of additional keyword arguments for the feature extractors
-    :return: combined feature extractor
+    Parent class for feature extractors defined in terms of other functions.
+    Using classes rather than functions allows them to be pickled.
     """
-    # If parameters for functions are not given, set empty parameters
-    if arg_params is None:
-        arg_params = [() for _ in functions]
-    if kwarg_params is None:
-        kwarg_params = [{} for _ in functions]
-    
-    # Define a new function that applies all of the given functions 
-    def get_features(msg):
+    @abstractmethod
+    def __call__(self, msg):
         """
         Convert a message to a bag of features
         :param msg: input string
-        :return: bag of features
+        :return: dict-like bag of features
+        """
+
+
+class combine(Extractor):
+    """
+    Wrap many feature extractors in a single function
+    """
+    def __init__(self, functions, arg_params=None, kwarg_params=None):
+        """
+        Wrap many feature extractors in a single function
+        :param functions: iterable of functions mapping from a string to a Counter
+        - Counters should have distinct keys, to avoid collisions
+        :param arg_params: iterable of additional arguments for the feature extractors
+        :param kwarg_params: iterable of additional keyword arguments for the feature extractors
+        :return: combined feature extractor
+        """
+        # If parameters for functions are not given, set empty parameters
+        if arg_params is None:
+            arg_params = [() for _ in functions]
+        if kwarg_params is None:
+            kwarg_params = [{} for _ in functions]
+        # Save functions and additional arguments, to be used in __call__
+        self.functions_with_params = list(zip(functions, arg_params, kwarg_params))
+    
+    def __call__(self, msg):
+        """
+        Convert a message to a bag of features
+        :param msg: input string
+        :return: dict-like bag of features
         """
         bag = Counter()
         # Apply each function, with the given parameters
-        for func, args, kwargs in zip(functions, arg_params, kwarg_params):
+        for func, args, kwargs in self.functions_with_params:
             bag += func(msg, *args, **kwargs)
         return bag
-    
-    return get_features
 
-def apply_to_parts(function, sep):
+
+class apply_to_parts(Extractor):
     """
     Wrap a feature extractor, so it applies to several messages concatenated together
-    :param function: function mapping from a string to a Counter
-    :param sep: substring separating the individual messages
-    :return: new feature extractor
     """
-    # Define a new function
-    def get_features(msg):
+    def __init__(self, function, sep):
+        """
+        Wrap a feature extractor, so it applies to several messages concatenated together
+        :param function: function mapping from a string to a Counter
+        :param sep: substring separating the individual messages
+        :return: new feature extractor
+        """
+        self.function = function
+        self.sep = sep
+    
+    def __call__(self, msg):
         """
         Convert a message to a bag of features
         :param msg: input string
-        :return: bag of features
+        :return: dict-like bag of features
         """
         bag = Counter()
         # Apply the function to each part
-        for part in msg.split(sep):
-            bag += function(part)
+        for part in msg.split(self.sep):
+            bag += self.function(part)
         return bag
-    
-    return get_features
-    
+
+
 ### Functions for producing vectors of features
 
 def get_global_set(bags_of_features):
@@ -161,7 +185,7 @@ def vectorise_one(bag, feature_dict):
 def vectorise(bags, feature_dict):
     """
     Convert bags of features to numpy arrays
-    :param bag: Counters of features
+    :param bags: Counters of features
     :param feature_dict: dict mapping feature names to indices
     :return: feature vectors as a matrix
     """
@@ -173,16 +197,46 @@ def vectorise(bags, feature_dict):
                 vecs[i, feature_dict[feat]] = value
     return vecs
 
-def get_vectors(msgs, function, feature_dict):
+def get_vectors(msgs, extractor, feature_dict, weights=None):
     """
     Get feature vectors for many messages
     :param msgs: input strings
-    :param function: feature extractor, mapping from a string to a bag of features
+    :param extractor: feature extractor, mapping from a string to a bag of features
     :param feature_dict: dict mapping from features names to indices
+    :param weights: array of weights, to be multiplied with extracted vectors
     :return: feature vectors as a matrix
     """
-    bags = [function(m) for m in msgs]
-    return vectorise(bags, feature_dict)
+    bags = [extractor(m) for m in msgs]
+    vectors = vectorise(bags, feature_dict)
+    if weights is not None:
+        vectors *= weights
+    return vectors
+
+class Vectoriser:
+    """
+    Class for converting messages to feature vectors
+    """
+    def __init__(self, extractor, feature_dict, weights=None):
+        """
+        :param extractor: feature extractor, mapping from a string to a bag of features
+        :param feature_dict: dict mapping from features names to indices
+        :param weights: array of weights, to be multiplied with extracted vectors
+        """
+        self.extractor = extractor
+        self.feature_dict = feature_dict
+        self.weights = weights
+    
+    def __call__(self, msgs):
+        """
+        Get feature vectors for one or many messages
+        :param msgs: input strings
+        :return: feature vectors as a matrix
+        """
+        # If only one message was given, convert to a list
+        if isinstance(msgs, str):
+            msgs = [msgs]
+        return get_vectors(msgs, self.extractor, self.feature_dict, self.weights)
+    
 
 ### For human readability
 

@@ -1,8 +1,20 @@
 import csv, pickle, os, numpy as np
-from collections import Counter
 from warnings import warn
 
-from features import get_global_set, feature_list_and_dict, vectorise
+from features import get_global_set, feature_list_and_dict, vectorise, document_frequency, Vectoriser
+
+def save_pkl_txt(name_freq, filename, directory='../data'):
+    """
+    Save a list of names and frequencies, in both .pkl and .txt format
+    :param name_freq: list of (name, frequency) pairs
+    :param filename: name of output files (without file extension)
+    :param directory: directory of data files (default ../data)
+    """
+    with open(os.path.join(directory, filename+'.pkl'), 'wb') as f:
+        pickle.dump(name_freq, f)
+    with open(os.path.join(directory, filename+'.txt'), 'w') as f:
+        for name, freq in name_freq:
+            f.write('{}\t{}\n'.format(name, freq))
 
 def save(feat_bags, code_vecs, code_names, output_file, directory='../data'):
     """
@@ -42,19 +54,10 @@ def save(feat_bags, code_vecs, code_names, output_file, directory='../data'):
     # Convert from Numpy to Python data types
     
     feats = list(zip(feat_list, [int(x) for x in feat_freq]))
-    with open(os.path.join(directory, output_file+'_features.pkl'), 'wb') as f:
-        pickle.dump(feats, f)
-    with open(os.path.join(directory, output_file+'_features.txt'), 'w') as f:
-        for feat, count in feats:
-            f.write('{}\t{}\n'.format(feat, count))
+    save_pkl_txt(feats, output_file+'_features', directory)
     
     codes = list(zip(code_names, [int(x) for x in code_freq]))
-    with open(os.path.join(directory, output_file+'_codes.pkl'), 'wb') as f:
-        pickle.dump(codes, f)
-    with open(os.path.join(directory, output_file+'_codes.txt'), 'w') as f:
-        for feat, count in codes:
-            f.write('{}\t{}\n'.format(feat, count))
-        
+    save_pkl_txt(codes, output_file+'_codes', directory)
     
     print('Codes:')
     print(*codes, sep='\n')
@@ -72,7 +75,7 @@ def preprocess_long(input_file, output_file, extractor, directory='../data', tex
     :param directory: directory of data files (default ../data)
     :param text_col: index of column containing text
     :param ignore_cols: indices of columns to ignore
-    :param convert: function to convert codes strings (e.g. bool or int)
+    :param convert: function to convert code strings (e.g. bool or int)
     """
     
     # Extract features and codes
@@ -219,6 +222,64 @@ def preprocess_keywords(keyword_file, feature_file, output_file=None, directory=
     with open(os.path.join(directory, output_file+'.pkl'), 'wb') as f:
         pickle.dump(full_list, f)
 
+def iter_bags_of_features(input_files, extractor, directory='../data', text_col=0):
+    """
+    Extract features from all messages, and filter by document frequency
+    :param input_files: single filename, or list of filenames (without .csv file extension)
+    :param extractor: function mapping strings to bags of features
+    :param directory: directory of data files (default ../data)
+    :param text_col: index of column containing text (default 0)
+    :return: iterator yielding bags of features, one per message
+    """
+    # If only one file is given, convert to a list
+    if isinstance(input_files, str):
+        input_files = [input_files]
+    # Iterate through files
+    for filename in input_files:
+        with open(os.path.join(directory, filename+'.csv'), newline='') as f:
+            # Process the file as a CSV file
+            reader = csv.reader(f)
+            # Ignore headings
+            next(reader)
+            # Iterate through messages
+            for row in reader:
+                yield extractor(row[text_col])
+
+def extract_features_and_idf(input_files, output_file, extractor, threshold=None, directory='../data', text_col=0):
+    """
+    Extract features from all messages, and filter by document frequency
+    Creates a Vectoriser that can convert messages to feature vectors weighted by idf 
+    :param input_files: single filename, or list of filenames (without .csv file extension)
+    :param output_file: name of output file (without .pkl file extension)
+    - as well as saving to example.pkl, also saves to:
+    - example_features.pkl (list of names of features, with frequencies)
+    - example_features.txt (as above, but human-readable)
+    :param extractor: function mapping strings to bags of features
+    :param threshold: minimum document frequency to keep a feature
+    :param directory: directory of data files (default ../data)
+    :param text_col: index of column containing text (default 0)
+    """
+    # Get iterator over bags of features
+    bags = iter_bags_of_features(input_files, extractor, directory, text_col)
+    # Get document frequency
+    freq = document_frequency(bags)
+    # Filter out rare features
+    if threshold is not None:
+        freq = {feat:n for feat, n in freq.items() if n >= threshold}
+    # Assign indices to features
+    feat_list, feat_dict = feature_list_and_dict(freq.keys())
+    # Get idf array
+    idf = np.empty(len(feat_list))
+    for feat, n in freq.items():
+        idf[feat_dict[feat]] = 1/n
+    # Create and save Vectoriser
+    vectoriser = Vectoriser(extractor, feat_dict, idf)
+    with open(os.path.join(directory, output_file+'.pkl'), 'wb') as f:
+        pickle.dump(vectoriser, f)
+    # Save list of features
+    feat_freq = [(feat, freq[feat]) for feat in feat_list]
+    save_pkl_txt(feat_freq, output_file+'_features', directory)
+
 
 if __name__ == "__main__":
     from features import bag_of_words, bag_of_ngrams, bag_of_variable_character_ngrams, combine
@@ -239,3 +300,7 @@ if __name__ == "__main__":
     #preprocess_keywords('wash_keywords', 'wash_features')
     #preprocess_keywords('nutrition_keywords', 'nutrition_features')
     #preprocess_keywords('delivery_keywords', 'delivery_features')
+    
+    ### Define feature vectors based on a whole corpus
+    #input_files = ['malaria_original', 'wash_original', 'nutrition_original', 'ANC_Delivery Training Set.xlsx - Short']
+    #extract_features_and_idf(input_files, 'four_combined', feature_extractor, 3)
