@@ -56,7 +56,7 @@ def bag_of_variable_character_ngrams(msg, min_n, max_n):
         bag += bag_of_character_ngrams(msg, n)
     return bag
 
-### Functions for combining types of feature
+### Functions for combining types of feature, and for preprocessing
 
 class Extractor(ABC):
     """
@@ -120,17 +120,47 @@ class apply_to_parts(Extractor):
         self.function = function
         self.sep = sep
     
-    def __call__(self, msg):
+    def __call__(self, msg, *args, **kwargs):
         """
         Convert a message to a bag of features
         :param msg: input string
         :return: dict-like bag of features
         """
         bag = Counter()
-        # Apply the function to each part
+        # Apply the wrapped function to each part
+        # Additional arguments are passed to the wrapped function
         for part in msg.split(self.sep):
-            bag += self.function(part)
+            bag += self.function(part, *args, **kwargs)
         return bag
+
+
+class with_preprocessing(Extractor):
+    """
+    Wrap a feature extractor, so that the message is first preprocessed 
+    """
+    def __init__(self, function, preprocessors):
+        """
+        Wrap a feature extractor, so that the message is first preprocessed
+        :param function: function mapping from a string to a Counter
+        :param preprocessors: function or list/tuple of functions, mapping from a string to a string
+        :return: new feature extractor, applying the preprocessors in the order given
+        """
+        self.function = function
+        if isinstance(preprocessors, (list, tuple)):
+            self.preprocessors = preprocessors
+        else:
+            self.preprocessors = [preprocessors]
+    
+    def __call__(self, msg, *args, **kwargs):
+        """
+        Convert a message to a bag of features
+        :param msg: input string
+        :return: dict-like bag of features
+        """
+        # Additional arguments are passed to the wrapped function
+        for preproc in self.preprocessors:
+            msg = preproc(msg)
+        return self.function(msg, *args, **kwargs)
 
 
 ### Functions for producing vectors of features
@@ -260,3 +290,16 @@ def bagify(vectors, feature_list):
     :return: list of bags of features
     """
     return [bagify_one(v, feature_list) for v in vectors]
+
+
+if __name__ == "__main__":
+    from spelling import rules
+    from functools import partial
+    
+    feature_extractor = apply_to_parts(with_preprocessing(combine([bag_of_words,
+                                                                   partial(bag_of_ngrams, n=2),
+                                                                   partial(bag_of_variable_character_ngrams, min_n=4, max_n=6)]),
+                                                          rules),
+                                       '&&&')
+    
+    print(feature_extractor('raadyow hargeisa&&&radio hargaysa'))
