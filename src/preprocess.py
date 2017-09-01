@@ -16,7 +16,7 @@ def save_pkl_txt(name_freq, filename, directory='../data'):
         for name, freq in name_freq:
             f.write('{}\t{}\n'.format(name, freq))
 
-def save(msgs, code_vecs, code_names, output_file, extractor=None, vectoriser=None, directory='../data'):
+def save(msgs, code_vecs, code_names, output_file, extractor=None, vectoriser=None, raw=False, directory='../data'):
     """
     Save features and codes to file
     :param msgs: list of strings (supervised learning input)
@@ -33,6 +33,7 @@ def save(msgs, code_vecs, code_names, output_file, extractor=None, vectoriser=No
     - example_features.txt (as above, but human-readable)
     :param extractor: function mapping strings to bags of features
     :param vectoriser: function mapping lists of strings to numpy arrays
+    :param raw: if true, save raw messages, rather than extracting features
     :param directory: directory of data files (default ../data)
     """
     # Check that input dimensions match
@@ -42,9 +43,11 @@ def save(msgs, code_vecs, code_names, output_file, extractor=None, vectoriser=No
         raise ValueError('Dimensions do not match')
     
     # Convert the messages to feature vectors
-    if vectoriser:
+    if raw:
+        feat_vecs = msgs
+    elif vectoriser:
         feat_vecs = vectoriser(msgs)
-    else:
+    elif extractor:
         # If we just have a feature extractor, we must define indices of features
         # Extract features
         feat_bags = [extractor(m) for m in msgs]
@@ -57,6 +60,8 @@ def save(msgs, code_vecs, code_names, output_file, extractor=None, vectoriser=No
         feat_freq = (feat_vecs != 0).sum(0)
         feats = list(zip(feat_list, [int(x) for x in feat_freq]))  # Convert from Numpy to Python data types
         save_pkl_txt(feats, output_file+'_features', directory)
+    else:
+        raise ValueError('processing method not specified')
     
     # Find the frequency of each code
     code_freq = code_vecs.sum(0)
@@ -72,23 +77,25 @@ def save(msgs, code_vecs, code_names, output_file, extractor=None, vectoriser=No
     with open(os.path.join(directory, output_file+'.pkl'), 'wb') as f:
         pickle.dump((feat_vecs, code_vecs), f)
 
-def preprocess_long(input_file, output_file, extractor=None, vectoriser=None, directory='../data', text_col=0, ignore_cols=(), convert=bool):
+def preprocess_long(input_file, output_file, extractor=None, vectoriser=None, raw=False, directory='../data', text_col=0, ignore_cols=(), convert=bool):
     """
     Preprocess a csv file to feature vectors and binary codes,
     where the input data has a 0 or 1 for each code and message
     :param input_file: input file name (without .csv file extension)
     :param output_file: output file name (without .pkl file extension)
     :param extractor: function mapping strings to bags of features
-    :param vectoriser: function mapping lists of strings to numpy arrays 
+    :param vectoriser: function mapping lists of strings to numpy arrays
+    :param raw: if true, save raw messages, rather than extracting features
     :param directory: directory of data files (default ../data)
     :param text_col: index of column containing text
     :param ignore_cols: indices of columns to ignore
     :param convert: function to convert code strings (e.g. bool or int)
     """
-    if extractor is None and vectoriser is None:
-        raise TypeError('Either extractor or vectoriser must be given')
-    if extractor and vectoriser:
-        raise TypeError('Only one of extractor and vectoriser should be given')
+    if not raw:
+        if extractor is None and vectoriser is None:
+            raise TypeError('Either extractor or vectoriser must be given')
+        if extractor and vectoriser:
+            raise TypeError('Only one of extractor and vectoriser should be given')
     
     # Extract features and codes
     # We can vectorise the codes immediately, but for features, we first need a global list
@@ -114,9 +121,9 @@ def preprocess_long(input_file, output_file, extractor=None, vectoriser=None, di
     code_vecs = np.array(code_vecs)
     
     # Save the information
-    save(msgs, code_vecs, code_names, output_file, extractor, vectoriser, directory)
+    save(msgs, code_vecs, code_names, output_file, extractor, vectoriser, raw, directory)
 
-def preprocess_pairs(input_file, output_file, extractor=None, vectoriser=None, directory='../data', text_col=0, ignore_cols=(), uncoded=('', 'NM')):
+def preprocess_pairs(input_file, output_file, extractor=None, vectoriser=None, raw=False, directory='../data', text_col=0, ignore_cols=(), uncoded=('', 'NM')):
     """
     Preprocess a csv file to feature vectors and binary codes,
     where the input data has groups of codes,
@@ -125,15 +132,18 @@ def preprocess_pairs(input_file, output_file, extractor=None, vectoriser=None, d
     :param input_file: input file name (without .csv file extension)
     :param output_file: output file name (without .pkl file extension)
     :param extractor: function mapping strings to bags of features
+    :param vectoriser: function mapping lists of strings to numpy arrays
+    :param raw: if true, save raw messages, rather than extracting features
     :param directory: directory of data files (default ../data)
     :param text_col: index of column containing text
     :param ignore_cols: indices of columns to ignore
     :param uncoded: strings to be interpreted as lacking a code
     """
-    if extractor is None and vectoriser is None:
-        raise TypeError('Either extractor or vectoriser must be given')
-    if extractor and vectoriser:
-        raise TypeError('Only one of extractor and vectoriser should be given')
+    if not raw:
+        if extractor is None and vectoriser is None:
+            raise TypeError('Either extractor or vectoriser must be given')
+        if extractor and vectoriser:
+            raise TypeError('Only one of extractor and vectoriser should be given')
     
     # Extract features and codes
     # We cannot vectorise these until we have a global list
@@ -185,7 +195,7 @@ def preprocess_pairs(input_file, output_file, extractor=None, vectoriser=None, d
     code_vecs = np.array([vectorise_codes(x) for x in code_sets])
     
     # Save the information
-    save(msgs, code_vecs, code_list, output_file, extractor, vectoriser, directory)
+    save(msgs, code_vecs, code_list, output_file, extractor, vectoriser, raw, directory)
 
 def preprocess_keywords(keyword_file, feature_file, output_file=None, directory='../data'):
     """
@@ -239,20 +249,21 @@ def preprocess_keywords(keyword_file, feature_file, output_file=None, directory=
     with open(os.path.join(directory, output_file+'.pkl'), 'wb') as f:
         pickle.dump(full_list, f)
 
-def iter_bags_of_features(input_files, extractor, directory='../data', text_col=0):
+def iter_msgs(input_files, directory='../data', text_col=0):
     """
-    Extract features from all messages, and filter by document frequency
+    Iterate through messages in multiple files
     :param input_files: single filename, or list of filenames (without .csv file extension)
-    :param extractor: function mapping strings to bags of features
     :param directory: directory of data files (default ../data)
     :param text_col: index of column containing text (default 0)
-    :return: iterator yielding bags of features, one per message
+    :return: iterator yielding messages
     """
     # If only one file is given, convert to a list
     if isinstance(input_files, str):
         input_files = [input_files]
+    if isinstance(text_col, int):
+        text_col = [text_col] * len(input_files)
     # Iterate through files
-    for filename in input_files:
+    for filename, column in zip(input_files, text_col):
         with open(os.path.join(directory, filename+'.csv'), newline='') as f:
             # Process the file as a CSV file
             reader = csv.reader(f)
@@ -260,7 +271,44 @@ def iter_bags_of_features(input_files, extractor, directory='../data', text_col=
             next(reader)
             # Iterate through messages
             for row in reader:
-                yield extractor(row[text_col])
+                yield row[column]
+
+def extract_features_and_idf_from_messages(msgs, output_file, extractor, threshold=None, directory='../data'):
+    """
+    Extract features from all messages, and filter by document frequency
+    Creates a Vectoriser that can convert messages to feature vectors weighted by idf 
+    :param msgs: iterable of messages
+    :param output_file: name of output file (without .pkl file extension)
+    - as well as saving to example.pkl, also saves to:
+    - example_features.pkl (list of names of features, with frequencies)
+    - example_features.txt (as above, but human-readable)
+    :param extractor: function mapping strings to bags of features
+    :param threshold: minimum document frequency to keep a feature
+    :param directory: directory of data files (default ../data)
+    :return: vectoriser
+    """
+    # Get iterator over bags of features
+    bags = (extractor(m) for m in msgs)
+    # Get document frequency
+    freq = document_frequency(bags)
+    # Filter out rare features
+    if threshold is not None:
+        freq = {feat:n for feat, n in freq.items() if n >= threshold}
+    # Assign indices to features
+    feat_list, feat_dict = feature_list_and_dict(freq.keys())
+    # Get idf array
+    idf = np.empty(len(feat_list))
+    for feat, n in freq.items():
+        idf[feat_dict[feat]] = 1/n
+    # Create and save Vectoriser
+    vectoriser = Vectoriser(extractor, feat_dict, idf)
+    if output_file is not None:
+        with open(os.path.join(directory, output_file+'.pkl'), 'wb') as f:
+            pickle.dump(vectoriser, f)
+        # Save list of features
+        feat_freq = [(feat, freq[feat]) for feat in feat_list]
+        save_pkl_txt(feat_freq, output_file+'_features', directory)
+    return vectoriser
 
 def extract_features_and_idf(input_files, output_file, extractor, threshold=None, directory='../data', text_col=0):
     """
@@ -275,42 +323,27 @@ def extract_features_and_idf(input_files, output_file, extractor, threshold=None
     :param threshold: minimum document frequency to keep a feature
     :param directory: directory of data files (default ../data)
     :param text_col: index of column containing text (default 0)
+    :return: vectoriser
     """
-    # Get iterator over bags of features
-    bags = iter_bags_of_features(input_files, extractor, directory, text_col)
-    # Get document frequency
-    freq = document_frequency(bags)
-    # Filter out rare features
-    if threshold is not None:
-        freq = {feat:n for feat, n in freq.items() if n >= threshold}
-    # Assign indices to features
-    feat_list, feat_dict = feature_list_and_dict(freq.keys())
-    # Get idf array
-    idf = np.empty(len(feat_list))
-    for feat, n in freq.items():
-        idf[feat_dict[feat]] = 1/n
-    # Create and save Vectoriser
-    vectoriser = Vectoriser(extractor, feat_dict, idf)
-    with open(os.path.join(directory, output_file+'.pkl'), 'wb') as f:
-        pickle.dump(vectoriser, f)
-    # Save list of features
-    feat_freq = [(feat, freq[feat]) for feat in feat_list]
-    save_pkl_txt(feat_freq, output_file+'_features', directory)
+    return extract_features_and_idf_from_messages(iter_msgs(input_files, directory, text_col),
+                                                  output_file, extractor, threshold, directory)
 
 
 if __name__ == "__main__":
+    # TODO command line
+    
     ### Extract both single words and bigrams
-    '''
-    from features import bag_of_words, bag_of_ngrams, bag_of_variable_character_ngrams, combine
-    functions = [bag_of_words, bag_of_ngrams]
-    kwargs = [{}, {'n': 2}]
-    feature_extractor = combine(functions, kwarg_params=kwargs)
-    '''
+    
+    from features import bag_of_words, bag_of_ngrams, bag_of_variable_character_ngrams, combine, apply_to_parts
+    functions = [bag_of_words, bag_of_ngrams, bag_of_variable_character_ngrams]
+    kwargs = [{}, {'n': 2}, {'min_n': 4, 'max_n':5}]
+    feature_extractor = apply_to_parts(combine(functions, kwarg_params=kwargs), '&&&')
+    
     ### Define feature vectors based on a whole corpus
-    '''
+    
     input_files = ['malaria_original', 'wash_original', 'nutrition_original', 'ANC_Delivery Training Set.xlsx - Short']
-    extract_features_and_idf(input_files, 'four_combined', feature_extractor, 3)
-    '''
+    extract_features_and_idf(input_files, 'four_combined_word_bigram_char', feature_extractor, 3)
+    
     ### Preprocess individual files with an extractor
     '''
     preprocess_pairs('malaria_original', 'malaria', feature_extractor, ignore_cols=[1,6])
@@ -319,18 +352,19 @@ if __name__ == "__main__":
     preprocess_long('ANC_Delivery Training Set.xlsx - Short', 'delivery', feature_extractor, convert=int)
     '''
     ### Preprocess individual files with a vectoriser
-    '''
-    with open('../data/four_combined.pkl', 'rb') as f:
+    
+    with open('../data/four_combined_word_bigram_char.pkl', 'rb') as f:
         vecr = pickle.load(f)
-    preprocess_pairs('malaria_original', 'malaria', vectoriser=vecr, ignore_cols=[1,6])
-    preprocess_pairs('wash_original', 'wash', vectoriser=vecr, ignore_cols=[1,2,13,14])
-    preprocess_long('nutrition_original', 'nutrition', vectoriser=vecr, ignore_cols=[1,13,14], convert=bool)
-    preprocess_long('ANC_Delivery Training Set.xlsx - Short', 'delivery', vectoriser=vecr, convert=int)
-    '''
+    preprocess_pairs('anc_fully_labelled', 'delivery_new', vectoriser=vecr, ignore_cols=[0,1,2,3,5,6,13,14], text_col=4)
+    #preprocess_pairs('malaria_original', 'malaria2', vectoriser=vecr, ignore_cols=[1,6])
+    #preprocess_pairs('wash_original', 'wash2', vectoriser=vecr, ignore_cols=[1,2,13,14])
+    #preprocess_long('nutrition_original', 'nutrition2', vectoriser=vecr, ignore_cols=[1,13,14], convert=bool)
+    #preprocess_long('ANC_Delivery Training Set.xlsx - Short', 'delivery2', vectoriser=vecr, convert=int)
+    
     ### Preprocess keywords
-    '''
-    preprocess_keywords('malaria_keywords', 'malaria_features')
-    preprocess_keywords('wash_keywords', 'wash_features')
-    preprocess_keywords('nutrition_keywords', 'nutrition_features')
-    preprocess_keywords('delivery_keywords', 'delivery_features')
-    '''
+    
+    #preprocess_keywords('malaria_keywords', 'four_combined_word_bigram_char_features')
+    #preprocess_keywords('wash_keywords', 'four_combined_word_bigram_char_features')
+    #preprocess_keywords('nutrition_keywords', 'four_combined_word_bigram_char_features')
+    #preprocess_keywords('delivery_keywords', 'four_combined_word_bigram_char_features')
+    
