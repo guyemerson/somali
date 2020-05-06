@@ -5,6 +5,6 @@ For more information on the system produced by Africa's Voices:
 * [Introducing CODA: A tool for data analysis](https://www.africasvoices.org/ideas/newsblog/introducing-our-latest-analysis-tool-coda/)
 
 For reports from the Somali project:
-* [https://issuu.com/africasvoices/docs/unicef-somalia_hiv_aids_report_marc](Report for UNICEF Somalia on beliefs and practices concerning HIV/AIDS)
-* [https://issuu.com/africasvoices/docs/final-_africa_s_voices_report_for_u](Africa's Voices report for the malaria team, UNICEF Somalia)
-* [https://issuu.com/africasvoices/docs/gender_and_child_protection_report_](Gender and Child Protection Report for UNICEF Somalia)
+* [Report for UNICEF Somalia on beliefs and practices concerning HIV/AIDS](https://issuu.com/africasvoices/docs/unicef-somalia_hiv_aids_report_marc)
+* [Africa's Voices report for the malaria team, UNICEF Somalia](https://issuu.com/africasvoices/docs/final-_africa_s_voices_report_for_u)
+* [Gender and Child Protection Report for UNICEF Somalia](https://issuu.com/africasvoices/docs/gender_and_child_protection_report_)
